@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Card Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #2c3e50;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .timer {
+            font-size: 1.5em;
+            background-color: #34495e;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-gap: 8px;
+            margin: 20px;
+            max-width: 90vw;
+            overflow-x: auto;
+            padding: 10px;
+        }
+
+        .card {
+            width: 60px;
+            height: 60px;
+            background-color: #ecf0f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .card.flipped {
+            background-color: #3498db;
+            transform: rotateY(180deg);
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        #reset-button { background-color: #e74c3c; color: white; }
+        #next-level-button { background-color: #2ecc71; color: white; display: none; }
+        #reset-button:hover { background-color: #c0392b; }
+        #next-level-button:hover { background-color: #27ae60; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            animation: modalShow 0.3s;
+            max-width: 80%;
+        }
+
+        @keyframes modalShow {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .congrats { background-color: #2ecc71; color: white; }
+        .failed { background-color: #e74c3c; color: white; }
+
+        .modal button {
+            margin-top: 20px;
+            background-color: #34495e;
+            color: white;
+        }
+
+        .modal button:hover {
+            background-color: #2c3e50;
+        }
+
+        footer {
+            margin-top: 30px;
+            color: #bdc3c7;
+        }
+
+        @media (max-width: 600px) {
+            .card {
+                width: 50px;
+                height: 50px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Modals -->
+    <div class="modal" id="congrats-modal">
+        <div class="modal-content congrats">
+            <h2>🎉 Level Complete! 🎉</h2>
+            <p>Selamat! Kamu berhasil menyelesaikan level ini!</p>
+            <button id="next-level-btn">Next Level</button>
+        </div>
+    </div>
+
+    <div class="modal" id="final-congrats-modal">
+        <div class="modal-content congrats">
+            <h2>🏆 Selamat anda mendapatkan Rp 10.000 ! 🏆</h2>
+            <p>Screenshot sebagai bukti fan kirim ke WhatsApp Fajar</p>
+            <p>Luar biasa! Kamu menyelesaikan semua level!</p>
+            <button id="play-again-btn">Main Lagi</button>
+        </div>
+    </div>
+
+    <div class="modal" id="failed-modal">
+        <div class="modal-content failed">
+            <h2>⏰ Waktu Habis! ⏰</h2>
+            <p>Yuk coba lagi dan selesaikan lebih cepat!</p>
+            <button id="try-again-btn">Coba Lagi</button>
+        </div>
+    </div>
+
+    <!-- Game Interface -->
+    <div class="game-info">
+        <h1>Memory Game - Level <span id="current-level">1</span></h1>
+        <div class="timer">⏳ Waktu: <span id="time">15:00</span></div>
+    </div>
+
+    <div class="game-board"></div>
+
+    <div class="controls">
+        <button id="reset-button">Reset Game</button>
+        <button id="next-level-button">Next Level</button>
+    </div>
+
+    <footer>Created with ❤️ by nkn_fajar</footer>
+    <p>Mendapatkan keinginan apapun jika menang </p>
+
+    <script>
+        let currentLevel = 1;
+        let matchedPairs = 0;
+        let firstCard = null;
+        let secondCard = null;
+        let lockBoard = false;
+        let timeLeft = 900;
+        let timerInterval;
+        
+        const emojis = [
+            '😀', '😃', '😄', '😍', '🤩', '😗', '😙', '❤️',
+            '😚', '🙃', '🙂', '😊', '☺️', '😌', '😏', '😔',
+            '😓', '😟', '😥', '😢', '☹️', '🙁', '😕', '😧',
+            '😦', '😮', '😯', '😲', '🐈', '🐲', '🇮🇩', '🇲🇨',
+            '🐀', '🙈', '🙉', '🙊', '🐵', '😈', '👿','🌍',
+            '🍓', '🍒', '🍎', '🍈', '🍏', '🍜', '🥝','🍩',
+            '🍫', '🍙',
+        ];
+
+        // Timer Functions
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 900;
+            updateTimerDisplay();
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    showModal('failed');
+                    lockBoard = true;
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('time').textContent = 
+                `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Game Functions
+        function createBoard() {
+            const gridSize = getGridSize();
+            const gameBoard = document.querySelector('.game-board');
+            gameBoard.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+            gameBoard.innerHTML = '';
+            
+            const cards = generateCards();
+            shuffle(cards);
+            
+            cards.forEach(icon => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.icon = icon;
+                card.addEventListener('click', handleCardClick);
+                gameBoard.appendChild(card);
+            });
+        }
+
+        function handleCardClick() {
+            if (lockBoard || this === firstCard || this.classList.contains('flipped')) return;
+            
+            this.classList.add('flipped');
+            this.textContent = this.dataset.icon;
+            
+            firstCard ? (secondCard = this, checkMatch()) : (firstCard = this);
+        }
+
+        function checkMatch() {
+            const isMatch = firstCard.dataset.icon === secondCard.dataset.icon;
+            isMatch ? handleMatch() : handleMismatch();
+        }
+
+        function handleMatch() {
+            firstCard.removeEventListener('click', handleCardClick);
+            secondCard.removeEventListener('click', handleCardClick);
+            matchedPairs++;
+            
+            if (isLevelComplete()) {
+                if (currentLevel === 5) {
+                    showModal('final-congrats');
+                    clearInterval(timerInterval);
+                } else {
+                    showModal('congrats');
+                }
+            }
+            resetBoard();
+        }
+
+        function handleMismatch() {
+            lockBoard = true;
+            setTimeout(() => {
+                [firstCard, secondCard].forEach(card => {
+                    card.classList.remove('flipped');
+                    card.textContent = '';
+                });
+                resetBoard();
+            }, 1000);
+        }
+
+        function resetBoard() {
+            [firstCard, secondCard, lockBoard] = [null, null, false];
+        }
+
+        // Helper Functions
+        function getGridSize() {
+            return [2, 4, 6, 8, 10][currentLevel - 1];
+        }
+
+        function generateCards() {
+            const gridSize = getGridSize();
+            const totalPairs = (gridSize ** 2) / 2;
+            const selected = emojis.slice(0, totalPairs);
+            return selected.flatMap(e => [e, e]);
+        }
+
+        function shuffle(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+        }
+
+        function isLevelComplete() {
+            const totalPairs = (getGridSize() ** 2) / 2;
+            return matchedPairs === totalPairs;
+        }
+
+        function showModal(type) {
+            document.getElementById(`${type}-modal`).style.display = 'flex';
+        }
+
+        function hideModals() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+        }
+
+        function resetGame() {
+            currentLevel = 1;
+            matchedPairs = 0;
+            hideModals();
+            createBoard();
+            startTimer();
+            document.getElementById('current-level').textContent = 1;
+            document.getElementById('next-level-button').style.display = 'none';
+        }
+
+        // Event Listeners
+        document.getElementById('next-level-btn').addEventListener('click', () => {
+            currentLevel++;
+            matchedPairs = 0;
+            hideModals();
+            createBoard();
+            document.getElementById('current-level').textContent = currentLevel;
+        });
+
+        document.getElementById('play-again-btn').addEventListener('click', resetGame);
+        document.getElementById('try-again-btn').addEventListener('click', resetGame);
+        document.getElementById('reset-button').addEventListener('click', resetGame);
+
+        document.getElementById('next-level-button').addEventListener('click', () => {
+            currentLevel = Math.min(currentLevel + 1, 5);
+            matchedPairs = 0;
+            createBoard();
+            document.getElementById('current-level').textContent = currentLevel;
+            document.getElementById('next-level-button').style.display = 'none';
+        });
+
+        // Initialize Game
+        startTimer();
+        createBoard();
+    </script>
+</body>
+</html>
